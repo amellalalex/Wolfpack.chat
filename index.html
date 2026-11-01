@@ -1,0 +1,723 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Howl with me</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+  --bg:#3c4f7c;
+  --ink:#1f2433;
+  --ink-dim:#545c70;
+  --panel:rgba(250,246,238,.9);
+  --panel-line:rgba(31,36,51,.14);
+  --field:rgba(31,36,51,.06);
+  --accent:#2b3557;
+  --accent-ink:#f6f2e8;
+  --tag-bg:rgba(250,246,238,.82);
+  --tag-ink:#1f2433;
+  --tag-you:#2b3557;
+  --pixel:"Pixelify Sans", ui-monospace, "Courier New", monospace;
+  --sans:system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0f1a33;
+    --ink:#f1ece0;
+    --ink-dim:#a9b0c4;
+    --panel:rgba(14,20,38,.86);
+    --panel-line:rgba(241,236,224,.16);
+    --field:rgba(241,236,224,.08);
+    --accent:#e9dcae;
+    --accent-ink:#141a2e;
+    --tag-bg:rgba(14,20,38,.72);
+    --tag-ink:#f1ece0;
+    --tag-you:#e9dcae;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0f1a33;
+  --ink:#f1ece0;
+  --ink-dim:#a9b0c4;
+  --panel:rgba(14,20,38,.86);
+  --panel-line:rgba(241,236,224,.16);
+  --field:rgba(241,236,224,.08);
+  --accent:#e9dcae;
+  --accent-ink:#141a2e;
+  --tag-bg:rgba(14,20,38,.72);
+  --tag-ink:#f1ece0;
+  --tag-you:#e9dcae;
+}
+*,*::before,*::after{box-sizing:inherit}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);overflow:hidden;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+#gl{image-rendering:pixelated;image-rendering:crisp-edges}
+#tags{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+.tag{position:absolute;left:0;top:0;font-family:var(--pixel);font-size:13px;line-height:1;white-space:nowrap;
+  padding:4px 7px 5px;border-radius:3px;background:var(--tag-bg);color:var(--tag-ink);will-change:transform}
+.tag.you{box-shadow:0 0 0 2px var(--tag-you)}
+.tag .awoo{position:absolute;left:50%;bottom:100%;transform:translate(-50%,0);opacity:0;font-size:15px;color:#fff;
+  text-shadow:0 1px 0 rgba(0,0,0,.55);pointer-events:none}
+.tag.howling .awoo{animation:awoo 2.8s ease-out forwards}
+@keyframes awoo{0%{opacity:0;transform:translate(-50%,4px)}12%{opacity:1}75%{opacity:1}100%{opacity:0;transform:translate(-50%,-34px)}}
+
+#hud{position:fixed;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top,0px) + 12px) 14px 0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;pointer-events:none}
+#count{font-family:var(--pixel);font-size:15px;color:#f1ece0;text-shadow:0 1px 0 rgba(0,0,0,.5);padding-top:6px}
+#sound{pointer-events:auto;font:600 13px/1 var(--sans);color:var(--ink);background:var(--panel);border:1px solid var(--panel-line);
+  border-radius:999px;padding:9px 13px;cursor:pointer}
+
+#howlbar{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:center;
+  padding:0 16px calc(env(safe-area-inset-bottom,0px) + 22px)}
+#howl{font-family:var(--pixel);font-weight:600;font-size:24px;letter-spacing:.02em;min-width:200px;padding:16px 34px 18px;
+  border:0;border-radius:6px;background:var(--accent);color:var(--accent-ink);cursor:pointer;
+  box-shadow:0 5px 0 rgba(0,0,0,.35);transition:transform .08s, box-shadow .08s}
+#howl:active,#howl.down{transform:translateY(4px);box-shadow:0 1px 0 rgba(0,0,0,.35)}
+#howl:focus-visible,#sound:focus-visible,#chat-head:focus-visible,#chat-input:focus-visible,#chat-form button:focus-visible,#join button:focus-visible,#join input:focus-visible{outline:3px solid #7fb2ff;outline-offset:2px}
+
+#join{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 18px);transform:translateX(-50%);
+  width:min(360px, calc(100% - 28px));background:var(--panel);border:1px solid var(--panel-line);border-radius:10px;
+  padding:20px 18px 18px;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+#join h1{font-family:var(--pixel);font-weight:600;font-size:28px;line-height:1.1;margin:0 0 6px}
+#join p{margin:0 0 16px;font-size:14px;line-height:1.45;color:var(--ink-dim)}
+#join label{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
+#join .row{display:flex;gap:8px}
+#join input{flex:1;min-width:0;font:16px/1.2 var(--sans);color:var(--ink);background:var(--field);border:1px solid var(--panel-line);
+  border-radius:6px;padding:11px 12px}
+#join button{font-family:var(--pixel);font-weight:600;font-size:17px;border:0;border-radius:6px;padding:0 16px;
+  background:var(--accent);color:var(--accent-ink);cursor:pointer}
+#join button:disabled{opacity:.45;cursor:default}
+#note{margin-top:12px;font-size:12.5px;line-height:1.4;color:var(--ink-dim);min-height:1em}
+#chat{position:fixed;left:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 22px);width:320px;max-width:calc(100% - 28px);
+  background:var(--panel);border:1px solid var(--panel-line);border-radius:10px;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+  display:flex;flex-direction:column;overflow:hidden}
+#chat-head{display:flex;align-items:center;gap:8px;width:100%;border:0;background:none;color:var(--ink);font-family:var(--pixel);
+  font-weight:600;font-size:17px;padding:10px 12px;cursor:pointer;text-align:left}
+#chat-head .chev{margin-left:auto;font-size:13px;color:var(--ink-dim)}
+#unread{font:600 11px/1 var(--sans);background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:3px 6px}
+#chat-body{display:flex;flex-direction:column;border-top:1px solid var(--panel-line)}
+#chat.closed #chat-body{display:none}
+#log{list-style:none;margin:0;padding:8px 12px;height:min(240px,34vh);overflow-y:auto;font-size:14px;line-height:1.4;overscroll-behavior:contain}
+#log li{margin:0 0 6px;overflow-wrap:anywhere}
+#log .who{font-weight:600}
+#log .sw{display:inline-block;width:9px;height:9px;margin-right:6px;border-radius:1px;box-shadow:0 0 0 1px var(--panel-line)}
+#log .sys{color:var(--ink-dim);font-size:12.5px;font-style:italic}
+#chat-form{display:flex;gap:6px;padding:8px;border-top:1px solid var(--panel-line)}
+#chat-input{flex:1;min-width:0;font:16px/1.2 var(--sans);color:var(--ink);background:var(--field);border:1px solid var(--panel-line);border-radius:6px;padding:9px 10px}
+#chat-form button{font-family:var(--pixel);font-weight:600;font-size:15px;border:0;border-radius:6px;padding:0 13px;background:var(--accent);color:var(--accent-ink);cursor:pointer}
+.tag .say{position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%);width:max-content;max-width:180px;white-space:normal;
+  font-family:var(--sans);font-size:13px;line-height:1.3;padding:6px 9px;border-radius:8px;background:var(--panel);color:var(--ink);
+  border:1px solid var(--panel-line);opacity:0;transition:opacity .25s;overflow-wrap:anywhere}
+.tag.saying .say{opacity:1}
+@media (max-width:900px){
+  #chat{left:10px;right:10px;width:auto;max-width:none;bottom:calc(env(safe-area-inset-bottom,0px) + 96px)}
+  #log{height:min(200px,28vh)}
+}
+[hidden]{display:none!important}
+@media (prefers-reduced-motion: reduce){ .tag.howling .awoo{animation-duration:2.8s;transform:translate(-50%,-10px)} }
+</style>
+</head>
+<body>
+<canvas id="sky" aria-hidden="true"></canvas>
+<canvas id="gl" aria-label="Wolves on a cliff"></canvas>
+<div id="tags" aria-hidden="true"></div>
+
+<div id="hud" hidden>
+  <div id="count" aria-live="polite"></div>
+  <button id="sound" type="button"></button>
+</div>
+
+<div id="howlbar" hidden><button id="howl" type="button">Howl</button></div>
+
+<section id="chat" class="closed" hidden aria-label="Wolfpack.chat">
+  <button id="chat-head" type="button" aria-expanded="false" aria-controls="chat-body">Wolfpack.chat <span id="unread" hidden></span><span class="chev" aria-hidden="true">▴</span></button>
+  <div id="chat-body">
+    <ul id="log" aria-live="polite"></ul>
+    <form id="chat-form" autocomplete="off">
+      <input id="chat-input" maxlength="160" placeholder="Say something to the pack" enterkeyhint="send" aria-label="Message">
+      <button type="submit">Send</button>
+    </form>
+  </div>
+</section>
+
+<form id="join" autocomplete="off">
+  <h1>Howl with me</h1>
+  <p>Take your place on the cliff. Everyone who joins appears as a wolf, and every howl is heard by the whole pack.</p>
+  <label for="name">Your wolf’s name</label>
+  <div class="row">
+    <input id="name" maxlength="20" placeholder="Moonfang" enterkeyhint="go">
+    <button id="go" type="submit" disabled>Join</button>
+  </div>
+  <div id="note"></div>
+</form>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script>
+(function(){
+"use strict";
+const $ = s => document.querySelector(s);
+const store = {
+  get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
+  set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+};
+const HOWL_MS = 2800;
+const SP = 1.75;           // spacing between wolves
+const ROW_GAP = 2.5;
+
+/* ---------- colour scheme ---------- */
+const mqDark = window.matchMedia("(prefers-color-scheme: dark)");
+function isDark(){
+  const t = document.documentElement.getAttribute("data-theme");
+  if (t === "dark") return true;
+  if (t === "light") return false;
+  return mqDark.matches;
+}
+const PALETTES = {
+  night:{ top:"#0b1430", mid:"#24345c", horizon:"#51678f", ridgeFar:"#33456b", ridgeNear:"#22304f", valley:"#16203a", haze:0x41557d, moon:"#f2ecd2", stars:true,
+          hemiSky:0x9fb3e0, hemiGround:0x2a2f3a, hemiI:0.85, dirI:0.75 },
+  dusk: { top:"#2e3d6b", mid:"#7a6f97", horizon:"#e7ae8c", ridgeFar:"#8a7c99", ridgeNear:"#5d5778", valley:"#433f5c", haze:0x8e7f9c, moon:"#fff4dc", stars:false,
+          hemiSky:0xe8dcf0, hemiGround:0x3b3440, hemiI:0.9, dirI:0.85 }
+};
+let pal = isDark() ? PALETTES.night : PALETTES.dusk;
+
+/* ---------- three setup ---------- */
+const glCanvas = $("#gl");
+const renderer = new THREE.WebGLRenderer({ canvas:glCanvas, antialias:false, alpha:true, powerPreference:"low-power" });
+renderer.setClearColor(0x000000, 0);
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(pal.haze, 16, 70);
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200);
+const hemi = new THREE.HemisphereLight(pal.hemiSky, pal.hemiGround, pal.hemiI);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffffff, pal.dirI);
+sun.position.set(-4, 8, -6);
+scene.add(sun);
+const BOX = new THREE.BoxGeometry(1,1,1);
+
+function part(parent, mat, sx,sy,sz, x,y,z){
+  const m = new THREE.Mesh(BOX, mat);
+  m.scale.set(sx,sy,sz); m.position.set(x,y,z);
+  parent.add(m); return m;
+}
+
+/* seeded random */
+function rng(seed){ let s = seed >>> 0 || 1; return () => { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; return ((s >>> 0) % 100000) / 100000; }; }
+function hashStr(str){ let h = 2166136261; for (let i=0;i<str.length;i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+
+/* ---------- the cliff ---------- */
+const EDGE_Z = 1.9;
+(function buildCliff(){
+  const r = rng(7);
+  const moss = new THREE.MeshLambertMaterial({ color:0x55604c });
+  part(scene, moss, 90, 1, 46, 0, -0.5, EDGE_Z - 23);
+
+  const v = 0.7, blocks = [];
+  for (let x = -36; x <= 36; x += v){
+    const lip = (r() - 0.3) * 0.5;
+    blocks.push([x, -0.3, EDGE_Z + lip, v, 0.75 + r()*0.25, v + 0.2]);
+    let z = EDGE_Z + lip;
+    for (let k = 1; k < 9; k++){
+      if (r() < 0.12) continue;
+      z -= 0.12 + r()*0.3;
+      blocks.push([x + (r()-0.5)*0.2, -0.35 - k*v, z + (r()-0.5)*0.4, v, v, v + r()*0.3]);
+    }
+  }
+  const rocks = [];
+  for (let i=0;i<40;i++) rocks.push([(r()-0.5)*30, 0.12, EDGE_Z - 0.6 - r()*14, 0.3+r()*0.5, 0.2+r()*0.35, 0.3+r()*0.5]);
+  const all = blocks.concat(rocks);
+  const rockMat = new THREE.MeshLambertMaterial({ color:0xffffff });
+  const inst = new THREE.InstancedMesh(BOX, rockMat, all.length);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), c = new THREE.Color();
+  all.forEach((b,i) => {
+    m.compose(new THREE.Vector3(b[0],b[1],b[2]), q, new THREE.Vector3(b[3],b[4],b[5]));
+    inst.setMatrixAt(i, m);
+    const g = 0.33 + r()*0.14;
+    c.setRGB(g, g*1.01, g*1.08);
+    inst.setColorAt(i, c);
+  });
+  scene.add(inst);
+
+  const tufts = 320;
+  const grass = new THREE.InstancedMesh(BOX, new THREE.MeshLambertMaterial({ color:0xffffff }), tufts);
+  for (let i=0;i<tufts;i++){
+    const h = 0.12 + r()*0.22;
+    m.compose(new THREE.Vector3((r()-0.5)*26, h/2, EDGE_Z - 0.2 - r()*16), q, new THREE.Vector3(0.1+r()*0.08, h, 0.1+r()*0.08));
+    grass.setMatrixAt(i, m);
+    c.setHSL(0.17 + r()*0.08, 0.28 + r()*0.15, 0.3 + r()*0.12);
+    grass.setColorAt(i, c);
+  }
+  scene.add(grass);
+})();
+
+/* ---------- wolves ---------- */
+function randomCoat(){
+  const t = Math.random();                       // 0 = grey, 1 = brown
+  const s = t < 0.35 ? t * 0.15 : 0.12 + (t - 0.35) * 0.45;
+  const lMax = s > 0.2 ? 0.55 : 0.8;
+  return { h: Math.round(22 + Math.random()*14), s: +s.toFixed(3), l: +(0.26 + Math.random()*(lMax - 0.26)).toFixed(3) };
+}
+function cleanCoat(c){
+  if (!c || typeof c !== "object") return null;
+  const h = Number(c.h), s = Number(c.s), l = Number(c.l);
+  if (![h,s,l].every(Number.isFinite)) return null;
+  return { h: Math.min(45, Math.max(15, h)), s: Math.min(0.45, Math.max(0, s)), l: Math.min(0.82, Math.max(0.2, l)) };
+}
+function hsl(h,s,l){ return new THREE.Color().setHSL(h/360, Math.max(0,s), Math.min(0.95, Math.max(0.06,l))); }
+
+function makeWolf(coat, seed){
+  const mats = [
+    new THREE.MeshLambertMaterial({ color: hsl(coat.h, coat.s, coat.l) }),
+    new THREE.MeshLambertMaterial({ color: hsl(coat.h, coat.s*0.55, coat.l + 0.17) }),
+    new THREE.MeshLambertMaterial({ color: hsl(coat.h, coat.s*0.9, coat.l - 0.15) }),
+    new THREE.MeshLambertMaterial({ color: 0x1b1a1c })
+  ];
+  const [base, light, dark, black] = mats;
+  const g = new THREE.Group();
+  const body = new THREE.Group(); g.add(body);
+
+  // legs
+  [[-0.3,0.72],[0.3,0.72],[-0.3,-0.72],[0.3,-0.72]].forEach(([x,z],i) => {
+    part(g, i < 2 ? light : base, 0.27, 0.95, 0.3, x, 0.475, z);
+    part(g, light, 0.29, 0.12, 0.36, x, 0.06, z + 0.03);
+  });
+  part(body, base, 0.88, 0.78, 1.95, 0, 1.3, 0);
+  part(body, light, 0.98, 0.9, 0.55, 0, 1.36, 0.72);
+  part(body, dark, 0.62, 0.12, 1.6, 0, 1.72, -0.05);
+  part(body, light, 0.66, 0.14, 1.3, 0, 0.92, 0.05);
+  part(body, base, 0.92, 0.7, 0.5, 0, 1.28, -0.82);
+
+  const neck = new THREE.Group(); neck.position.set(0, 1.55, 0.95); body.add(neck);
+  part(neck, light, 0.62, 0.62, 0.55, 0, 0.12, 0.15);
+  part(neck, base, 0.82, 0.7, 0.78, 0, 0.42, 0.58);
+  part(neck, base, 0.42, 0.26, 0.52, 0, 0.32, 1.18);
+  part(neck, black, 0.16, 0.12, 0.1, 0, 0.42, 1.45);
+  part(neck, black, 0.08, 0.08, 0.06, -0.27, 0.56, 0.96);
+  part(neck, black, 0.08, 0.08, 0.06, 0.27, 0.56, 0.96);
+  const jaw = new THREE.Group(); jaw.position.set(0, 0.2, 0.95); neck.add(jaw);
+  part(jaw, light, 0.36, 0.13, 0.46, 0, 0, 0.23);
+  const earL = new THREE.Group(); earL.position.set(-0.24, 0.77, 0.45); neck.add(earL);
+  const earR = new THREE.Group(); earR.position.set(0.24, 0.77, 0.45); neck.add(earR);
+  [earL, earR].forEach(e => { part(e, base, 0.2, 0.32, 0.14, 0, 0.16, 0); part(e, dark, 0.2, 0.1, 0.15, 0, 0.36, 0); });
+
+  const tail = new THREE.Group(); tail.position.set(0, 1.55, -1.02); body.add(tail);
+  part(tail, base, 0.28, 0.28, 0.95, 0, 0, -0.47);
+  part(tail, dark, 0.3, 0.3, 0.26, 0, 0, -1.05);
+
+  return { group:g, body, neck, jaw, tail, earL, earR, mats, seed, howlStart:0, flick:0 };
+}
+function disposeWolf(w){ clearTimeout(w.sayT); scene.remove(w.group); w.mats.forEach(m => m.dispose()); if (w.tag) w.tag.remove(); }
+
+function animateWolf(w, t, now){
+  let up = 0;
+  if (w.howlStart){
+    const e = now - w.howlStart;
+    if (e > HOWL_MS){ w.howlStart = 0; if (w.tag) w.tag.classList.remove("howling"); }
+    else {
+      const a = Math.min(1, e/350), b = Math.min(1, (HOWL_MS - e)/500);
+      up = Math.min(a, b); up = up*up*(3 - 2*up);
+      w.jaw.rotation.x = up * (0.3 + 0.08*Math.sin(e/90));
+    }
+  }
+  if (!up) w.jaw.rotation.x = 0;
+  const ph = w.seed * 6.28;
+  w.body.position.y = Math.sin(t*1.7 + ph) * 0.018;
+  w.body.rotation.x = -up * 0.13;
+  w.neck.rotation.x = 0.06 - up * 1.02 + Math.sin(t*0.6 + ph)*0.03*(1-up);
+  w.neck.rotation.y = Math.sin(t*0.37 + ph)*0.12*(1-up);
+  w.tail.rotation.x = -0.95 - up*0.2;
+  w.tail.rotation.y = Math.sin(t*1.3 + ph)*0.18*(1-up);
+  if (w.flick > 0) w.flick -= 0.08; else if (Math.random() < 0.004) w.flick = 1;
+  const f = Math.max(0, w.flick) * 0.35;
+  w.earL.rotation.z = f; w.earR.rotation.z = -f*0.4;
+}
+
+/* ---------- state ---------- */
+const wolves = new Map();   // key -> wolf (key "local" for this tab)
+const tagsEl = $("#tags");
+const me = { joined:false, name:"", coat:null, seat:0, howl:0 };
+let room = null, roomState = "pending";
+
+function makeTag(w, name, isYou){
+  const el = document.createElement("div");
+  el.className = "tag" + (isYou ? " you" : "");
+  const n = document.createElement("span"); n.textContent = isYou ? name + " (you)" : name;
+  const a = document.createElement("span"); a.className = "awoo"; a.textContent = "awooo";
+  const s = document.createElement("span"); s.className = "say";
+  el.append(n, a, s);
+  tagsEl.appendChild(el);
+  w.tag = el; w.tagX = w.tagY = null;
+}
+
+function addOrUpdate(key, info, isYou){
+  let w = wolves.get(key);
+  const coatKey = JSON.stringify(info.coat);
+  if (w && w.coatKey !== coatKey){ disposeWolf(w); wolves.delete(key); w = null; }
+  if (!w){
+    w = makeWolf(info.coat, (hashStr(key) % 1000) / 1000);
+    w.coatKey = coatKey; w.key = key; w.lastHowl = info.howl; w.lastSayN = info.say ? info.say.n : 0;
+    if (!isYou && me.joined && performance.now() > quietUntil) logSys(info.name + " joined the cliff");
+    scene.add(w.group);
+    makeTag(w, info.name, isYou);
+    wolves.set(key, w);
+  } else {
+    if (w.name !== info.name) w.tag.firstChild.textContent = isYou ? info.name + " (you)" : info.name;
+    if (info.howl !== w.lastHowl){
+      if (info.howl > w.lastHowl) startHowl(w);
+      w.lastHowl = info.howl;
+    }
+    if (info.say && info.say.n > w.lastSayN){
+      w.lastSayN = info.say.n;
+      showSay(w, info.say.text);
+      if (me.joined) logMsg(info.name, info.coat, info.say.text, false);
+    }
+  }
+  w.name = info.name; w.seat = info.seat;
+  return w;
+}
+
+function startHowl(w){
+  w.howlStart = performance.now();
+  if (w.tag){ w.tag.classList.remove("howling"); void w.tag.offsetWidth; w.tag.classList.add("howling"); }
+  howlSound(w.seed, Math.max(-0.8, Math.min(0.8, w.group.position.x / 6)));
+}
+
+function syncPeers(peers){
+  const seen = new Set(["local"]);
+  for (const p of peers){
+    if (p.isMe || p.kind !== "viewer") continue;
+    const pr = p.presence || {};
+    const name = typeof pr.name === "string" ? pr.name.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f]/g,"").trim().slice(0,20) : "";
+    const coat = cleanCoat(pr.coat);
+    if (!name || !coat) continue;
+    const sayRaw = pr.say && typeof pr.say === "object" && Number.isFinite(pr.say.n) && typeof pr.say.text === "string" ? pr.say : null;
+    const sayText = sayRaw ? cleanText(sayRaw.text, 160) : "";
+    const info = { name, coat, seat: Number(pr.seat) || 0, howl: Number.isFinite(pr.howl) ? pr.howl : 0, say: sayText ? { n: sayRaw.n, text: sayText } : null };
+    addOrUpdate(p.peer, info, false);
+    seen.add(p.peer);
+  }
+  for (const [k,w] of wolves){ if (!seen.has(k)){ if (me.joined) logSys(w.name + " left the cliff"); disposeWolf(w); wolves.delete(k); } }
+  layout();
+}
+
+/* ---------- layout & camera ---------- */
+let horizonFrac = 0.35;
+function layout(){
+  const list = [...wolves.values()].sort((a,b) => (a.seat - b.seat) || (a.key < b.key ? -1 : 1));
+  const visible = me.joined ? list : [];
+  for (const w of list){ const on = me.joined; w.group.visible = on; w.tag.style.display = on ? "" : "none"; }
+  const aspect = innerWidth / innerHeight;
+  const perRow = aspect < 0.75 ? 3 : aspect < 1.25 ? 5 : 8;
+  const n = Math.max(1, visible.length);
+  const rows = Math.ceil(n / perRow);
+  visible.forEach((w,i) => {
+    const r = Math.floor(i / perRow), c = i % perRow;
+    const inRow = Math.min(perRow, visible.length - r*perRow);
+    const x = (c - (inRow - 1)/2) * SP + (r % 2 ? SP*0.3 : 0);
+    const z = 0.15 - r*ROW_GAP + (w.seed - 0.5)*0.3;
+    w.group.position.set(x, 0, z);
+    w.group.rotation.y = (w.seed - 0.5) * 0.35;
+  });
+  const width = (Math.min(n, perRow) - 1) * SP + 2.6;
+  const vf = THREE.MathUtils.degToRad(camera.fov);
+  const hf = 2 * Math.atan(Math.tan(vf/2) * aspect);
+  const d = Math.max(6.5, (width/2) / Math.tan(hf/2) + 1.2);
+  const back = -(rows - 1) * ROW_GAP;
+  camera.position.set(0, 1.1 + d*0.3, back - d);
+  const target = new THREE.Vector3(0, 1.3, back + 7);
+  camera.lookAt(target);
+  const pitch = Math.atan2(target.y - camera.position.y, target.z - camera.position.z);
+  horizonFrac = 0.5 + Math.tan(pitch) / (2*Math.tan(vf/2));
+  drawSky();
+  updateCount();
+}
+
+/* ---------- sky ---------- */
+const sky = $("#sky"), sctx = sky.getContext("2d");
+function drawSky(){
+  const dpr = Math.min(1.5, window.devicePixelRatio || 1);
+  const W = Math.round(innerWidth*dpr), H = Math.round(innerHeight*dpr);
+  if (sky.width !== W || sky.height !== H){ sky.width = W; sky.height = H; }
+  const hz = Math.max(0.15, Math.min(0.7, horizonFrac)) * H;
+  const g = sctx.createLinearGradient(0,0,0,hz);
+  g.addColorStop(0, pal.top); g.addColorStop(0.6, pal.mid); g.addColorStop(1, pal.horizon);
+  sctx.fillStyle = g; sctx.fillRect(0,0,W,hz+1);
+  const r = rng(42);
+  if (pal.stars){
+    for (let i=0;i<Math.round(W*hz/2600);i++){
+      const x = r()*W, y = r()*hz*0.85, s = (r() < 0.12 ? 2 : 1) * dpr;
+      sctx.fillStyle = `rgba(255,250,235,${0.35 + r()*0.6})`;
+      sctx.fillRect(Math.round(x), Math.round(y), s, s);
+    }
+  }
+  // moon, drawn in chunky pixels
+  const mr = Math.min(W,H) * 0.07, mx = W*0.7, my = hz*0.32, px = Math.max(3, Math.round(mr/7));
+  sctx.fillStyle = pal.moon;
+  for (let y=-mr; y<=mr; y+=px) for (let x=-mr; x<=mr; x+=px) if (x*x+y*y <= mr*mr) sctx.fillRect(Math.round(mx+x), Math.round(my+y), px, px);
+  const glow = sctx.createRadialGradient(mx,my,mr,mx,my,mr*4);
+  glow.addColorStop(0,"rgba(255,248,225,.18)"); glow.addColorStop(1,"rgba(255,248,225,0)");
+  sctx.fillStyle = glow; sctx.fillRect(mx-mr*4,my-mr*4,mr*8,mr*8);
+  // distant ridges
+  const ridge = (col, amp, base, seed) => {
+    sctx.fillStyle = col; sctx.beginPath(); sctx.moveTo(0,H);
+    const step = Math.max(6, Math.round(W/90));
+    for (let x=0; x<=W+step; x+=step){
+      const u = x/W*6.28;
+      const y = hz - base - amp*(0.55*Math.sin(u*1.3+seed) + 0.3*Math.sin(u*3.1+seed*2) + 0.15*Math.sin(u*7.7+seed*3));
+      sctx.lineTo(x, Math.round(y/step)*step);
+    }
+    sctx.lineTo(W,H); sctx.closePath(); sctx.fill();
+  };
+  ridge(pal.ridgeFar, H*0.035, H*0.02, 1.1);
+  ridge(pal.ridgeNear, H*0.025, -H*0.005, 4.2);
+  const v = sctx.createLinearGradient(0,hz,0,H);
+  v.addColorStop(0, pal.ridgeNear); v.addColorStop(1, pal.valley);
+  sctx.fillStyle = v; sctx.fillRect(0, hz + H*0.012, W, H);
+}
+
+function applyPalette(){
+  pal = isDark() ? PALETTES.night : PALETTES.dusk;
+  scene.fog.color.setHex(pal.haze);
+  hemi.color.setHex(pal.hemiSky); hemi.groundColor.setHex(pal.hemiGround); hemi.intensity = pal.hemiI;
+  sun.intensity = pal.dirI;
+  drawSky();
+}
+mqDark.addEventListener ? mqDark.addEventListener("change", applyPalette) : mqDark.addListener(applyPalette);
+new MutationObserver(applyPalette).observe(document.documentElement, { attributes:true, attributeFilter:["data-theme"] });
+
+/* ---------- sizing & render loop ---------- */
+function resize(){
+  const pr = Math.min(1, 520 / Math.min(innerWidth, innerHeight));
+  renderer.setPixelRatio(pr);
+  renderer.setSize(innerWidth, innerHeight, false);
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  layout();
+}
+addEventListener("resize", resize);
+
+const tmp = new THREE.Vector3();
+let last = 0;
+function frame(now){
+  requestAnimationFrame(frame);
+  if (now - last < 32) return;        // ~30 fps keeps phones cool
+  last = now;
+  const t = now / 1000;
+  for (const w of wolves.values()){
+    if (!w.group.visible) continue;
+    animateWolf(w, t, now);
+    tmp.set(0, 2.75, 0.4).applyMatrix4(w.group.matrixWorld).project(camera);
+    const x = Math.round((tmp.x*0.5 + 0.5) * innerWidth), y = Math.round((-tmp.y*0.5 + 0.5) * innerHeight);
+    if (x !== w.tagX || y !== w.tagY){
+      w.tagX = x; w.tagY = y;
+      w.tag.style.transform = `translate(${x}px,${y}px) translate(-50%,-100%)`;
+    }
+  }
+  renderer.render(scene, camera);
+}
+
+/* ---------- sound ---------- */
+let actx = null, soundOn = store.get("wolf.sound") !== "off";
+function ensureAudio(){
+  if (!actx){ try{ actx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){ actx = null; } }
+  if (actx && actx.state === "suspended") actx.resume();
+}
+function howlSound(seed, pan){
+  if (!soundOn || !actx || actx.state !== "running") return;
+  const t = actx.currentTime, base = 250 + seed*140, end = t + HOWL_MS/1000;
+  const out = actx.createGain();
+  out.gain.setValueAtTime(0.0001, t);
+  out.gain.exponentialRampToValueAtTime(0.11, t + 0.35);
+  out.gain.setValueAtTime(0.1, end - 0.8);
+  out.gain.exponentialRampToValueAtTime(0.0001, end);
+  const lp = actx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 1300; lp.Q.value = 5;
+  let node = lp;
+  if (actx.createStereoPanner){ const p = actx.createStereoPanner(); p.pan.value = pan; lp.connect(p); node = p; }
+  out.connect(lp); node.connect(actx.destination);
+  const lfo = actx.createOscillator(), lg = actx.createGain();
+  lfo.frequency.value = 5 + seed*1.5; lg.gain.value = base*0.018; lfo.connect(lg);
+  [["triangle",1,1],["sawtooth",1.003,0.22]].forEach(([type, mul, vol]) => {
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = type; g.gain.value = vol;
+    const f = o.frequency;
+    f.setValueAtTime(base*0.75*mul, t);
+    f.exponentialRampToValueAtTime(base*1.55*mul, t + 0.6);
+    f.linearRampToValueAtTime(base*1.48*mul, t + 1.7);
+    f.exponentialRampToValueAtTime(base*0.85*mul, end);
+    lg.connect(f);
+    o.connect(g); g.connect(out);
+    o.start(t); o.stop(end + 0.05);
+  });
+  lfo.start(t); lfo.stop(end + 0.05);
+}
+const soundBtn = $("#sound");
+function renderSound(){ soundBtn.textContent = soundOn ? "Sound on" : "Sound off"; soundBtn.setAttribute("aria-pressed", String(soundOn)); }
+soundBtn.addEventListener("click", () => { soundOn = !soundOn; store.set("wolf.sound", soundOn ? "on" : "off"); if (soundOn) ensureAudio(); renderSound(); });
+renderSound();
+
+/* ---------- UI ---------- */
+const nameInput = $("#name"), goBtn = $("#go"), note = $("#note");
+nameInput.value = store.get("wolf.name") || "";
+goBtn.disabled = !nameInput.value.trim();
+nameInput.addEventListener("input", () => { goBtn.disabled = !nameInput.value.trim(); });
+
+function updateCount(){
+  const el = $("#count");
+  if (!me.joined) return;
+  const n = wolves.size;
+  if (roomState === "none") el.textContent = "Only you can see this cliff here";
+  else el.textContent = n === 1 ? "1 wolf on the cliff" : `${n} wolves on the cliff`;
+}
+
+$("#join").addEventListener("submit", e => {
+  e.preventDefault();
+  const name = nameInput.value.trim().slice(0,20);
+  if (!name) return;
+  ensureAudio();
+  let coat = null;
+  try{ coat = cleanCoat(JSON.parse(store.get("wolf.coat") || "null")); }catch(_){}
+  if (!coat){ coat = randomCoat(); store.set("wolf.coat", JSON.stringify(coat)); }
+  store.set("wolf.name", name);
+  Object.assign(me, { joined:true, name, coat, seat: Date.now(), howl:0 });
+  addOrUpdate("local", { name, coat, seat: me.seat, howl:0 }, true);
+  $("#join").hidden = true; $("#hud").hidden = false; $("#howlbar").hidden = false;
+  quietUntil = performance.now() + 2500;
+  chatEl.hidden = false; setChatOpen(innerWidth > 900);
+  logSys("You joined the cliff as " + name);
+  trackMe();
+  syncPeers(peersFromState());
+  $("#howl").focus({ preventScroll:true });
+});
+
+const howlBtn = $("#howl");
+function doHowl(){
+  if (!me.joined) return;
+  ensureAudio();
+  const w = wolves.get("local");
+  if (w && w.howlStart && performance.now() - w.howlStart < 900) return;
+  me.howl += 1;
+  if (w){ w.lastHowl = me.howl; startHowl(w); }
+  if (chan && roomState === "live") chan.send({ type:"broadcast", event:"howl", payload:{ id: myId } });
+}
+howlBtn.addEventListener("click", doHowl);
+addEventListener("keydown", e => {
+  if (!me.joined || e.repeat || (e.target && e.target.tagName === "INPUT")) return;
+  if (e.key === "h" || e.key === "H" || (e.key === " " && e.target !== howlBtn)){
+    e.preventDefault(); howlBtn.classList.add("down"); doHowl();
+  }
+});
+addEventListener("keyup", () => howlBtn.classList.remove("down"));
+
+/* ---------- Wolfpack.chat ---------- */
+const chatEl = $("#chat"), chatHead = $("#chat-head"), logEl = $("#log"), chatInput = $("#chat-input"), unreadEl = $("#unread");
+let quietUntil = 0, unread = 0, lastSend = 0;
+me.sayN = 0;
+function cleanText(s, max){
+  return String(s).replace(/[\u0000-\u001f\u007f-\u009f\u200b\u200e\u200f\u202a-\u202e\u2060-\u2064]/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
+}
+function coatCss(c){ return `hsl(${c.h},${Math.round(c.s*100)}%,${Math.round(c.l*100)}%)`; }
+function addLine(li){
+  const atBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 40;
+  logEl.appendChild(li);
+  while (logEl.children.length > 150) logEl.firstChild.remove();
+  if (atBottom) logEl.scrollTop = logEl.scrollHeight;
+}
+function logMsg(name, coat, text, mine){
+  const li = document.createElement("li");
+  const sw = document.createElement("span"); sw.className = "sw"; sw.style.background = coatCss(coat);
+  const who = document.createElement("span"); who.className = "who"; who.textContent = name + ": ";
+  li.append(sw, who, document.createTextNode(text));
+  addLine(li);
+  if (!mine && chatEl.classList.contains("closed")){ unread++; renderUnread(); }
+}
+function logSys(text){ const li = document.createElement("li"); li.className = "sys"; li.textContent = text; addLine(li); }
+function renderUnread(){ unreadEl.hidden = !unread; unreadEl.textContent = unread > 9 ? "9+" : String(unread); }
+function setChatOpen(open){
+  chatEl.classList.toggle("closed", !open);
+  chatHead.setAttribute("aria-expanded", String(open));
+  chatHead.querySelector(".chev").textContent = open ? "▾" : "▴";
+  if (open){ unread = 0; renderUnread(); logEl.scrollTop = logEl.scrollHeight; }
+}
+chatHead.addEventListener("click", () => {
+  const open = chatEl.classList.contains("closed");
+  setChatOpen(open);
+  if (open) chatInput.focus({ preventScroll:true });
+});
+function showSay(w, text){
+  if (!w.tag) return;
+  w.tag.querySelector(".say").textContent = text;
+  w.tag.classList.add("saying");
+  clearTimeout(w.sayT);
+  w.sayT = setTimeout(() => w.tag && w.tag.classList.remove("saying"), 5000 + text.length*50);
+}
+$("#chat-form").addEventListener("submit", e => {
+  e.preventDefault();
+  const text = cleanText(chatInput.value, 160);
+  if (!text || !me.joined) return;
+  const now = performance.now();
+  if (now - lastSend < 600) return;
+  lastSend = now;
+  chatInput.value = "";
+  me.sayN += 1;
+  const w = wolves.get("local");
+  if (w){ w.lastSayN = me.sayN; showSay(w, text); }
+  logMsg(me.name, me.coat, text, true);
+  if (chan && roomState === "live") chan.send({ type:"broadcast", event:"say", payload:{ id: myId, text } });
+});
+
+/* ---------- pack connection (Supabase Realtime) ---------- */
+const CFG = window.WOLFPACK_CONFIG || {};
+const myId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : "w" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+let chan = null;
+function peersFromState(){
+  if (!chan) return [];
+  const st = chan.presenceState();
+  return Object.keys(st).map(k => ({ peer:k, isMe: k === myId, kind:"viewer", presence: (st[k] && st[k][0]) || {} }));
+}
+function trackMe(){
+  if (chan && me.joined && roomState === "live") chan.track({ name: me.name, coat: me.coat, seat: me.seat }).catch(()=>{});
+}
+(function connect(){
+  const url = CFG.supabaseUrl || "", key = CFG.supabaseAnonKey || "";
+  if (!window.supabase || !url || !key || /YOUR_/.test(url + key)){
+    roomState = "none";
+    note.textContent = "No pack server is set up yet (add your Supabase details to config.js), so you’ll be on the cliff alone.";
+    updateCount();
+    return;
+  }
+  const client = window.supabase.createClient(url, key);
+  chan = client.channel(CFG.channel || "wolfpack-cliff", { config:{ presence:{ key: myId }, broadcast:{ self:false } } });
+  chan.on("presence", { event:"sync" }, () => syncPeers(peersFromState()));
+  chan.on("broadcast", { event:"howl" }, msg => {
+    const p = msg && msg.payload; const w = p && typeof p.id === "string" ? wolves.get(p.id) : null;
+    if (w && me.joined) startHowl(w);
+  });
+  chan.on("broadcast", { event:"say" }, msg => {
+    const p = msg && msg.payload; if (!p || typeof p.id !== "string") return;
+    const w = wolves.get(p.id); const text = cleanText(p.text || "", 160);
+    if (!w || !text) return;
+    showSay(w, text);
+    if (me.joined) logMsg(w.name, JSON.parse(w.coatKey), text, false);
+  });
+  chan.subscribe(status => {
+    if (status === "SUBSCRIBED"){ roomState = "live"; note.textContent = ""; trackMe(); updateCount(); }
+    else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED"){ roomState = "none"; updateCount(); }
+  });
+})();
+
+resize();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
