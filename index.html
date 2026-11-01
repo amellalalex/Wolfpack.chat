@@ -287,9 +287,12 @@ function makeWolf(coat, seed){
   const body = new THREE.Group(); g.add(body);
 
   // legs
+  const legs = [];
   [[-0.3,0.72],[0.3,0.72],[-0.3,-0.72],[0.3,-0.72]].forEach(([x,z],i) => {
-    part(g, i < 2 ? light : base, 0.27, 0.95, 0.3, x, 0.475, z);
-    part(g, light, 0.29, 0.12, 0.36, x, 0.06, z + 0.03);
+    const hip = new THREE.Group(); hip.position.set(x, 0.95, z); g.add(hip);
+    part(hip, i < 2 ? light : base, 0.27, 0.95, 0.3, 0, -0.475, 0);
+    part(hip, light, 0.29, 0.12, 0.36, 0, -0.89, 0.03);
+    legs.push(hip);
   });
   part(body, base, 0.88, 0.78, 1.95, 0, 1.3, 0);
   part(body, light, 0.98, 0.9, 0.55, 0, 1.36, 0.72);
@@ -314,7 +317,7 @@ function makeWolf(coat, seed){
   part(tail, base, 0.28, 0.28, 0.95, 0, 0, -0.47);
   part(tail, dark, 0.3, 0.3, 0.26, 0, 0, -1.05);
 
-  return { group:g, body, neck, jaw, tail, earL, earR, mats, seed, howlStart:0, flick:0 };
+  return { group:g, body, neck, jaw, tail, earL, earR, legs, mats, seed, howlStart:0, flick:0, walk:0, stride:0 };
 }
 function disposeWolf(w){ clearTimeout(w.sayT); scene.remove(w.group); w.mats.forEach(m => m.dispose()); if (w.tag) w.tag.remove(); }
 
@@ -331,12 +334,15 @@ function animateWolf(w, t, now){
   }
   if (!up) w.jaw.rotation.x = 0;
   const ph = w.seed * 6.28;
-  w.body.position.y = Math.sin(t*1.7 + ph) * 0.018;
+  const wk = w.walk, st = w.stride;
+  w.legs.forEach((leg, i) => { leg.rotation.x = Math.sin(st + ((i === 0 || i === 3) ? 0 : Math.PI)) * 0.55 * wk; });
+  w.body.position.y = Math.sin(t*1.7 + ph) * 0.018 * (1 - wk) + Math.abs(Math.sin(st)) * 0.06 * wk;
   w.body.rotation.x = -up * 0.13;
-  w.neck.rotation.x = 0.06 - up * 1.02 + Math.sin(t*0.6 + ph)*0.03*(1-up);
+  w.body.rotation.z = Math.sin(st) * 0.03 * wk;
+  w.neck.rotation.x = 0.06 + 0.14*wk - up * 1.02 + Math.sin(t*0.6 + ph)*0.03*(1-up) + Math.sin(st*2)*0.04*wk;
   w.neck.rotation.y = Math.sin(t*0.37 + ph)*0.12*(1-up);
   w.tail.rotation.x = -0.95 - up*0.2;
-  w.tail.rotation.y = Math.sin(t*1.3 + ph)*0.18*(1-up);
+  w.tail.rotation.y = Math.sin(t*1.3 + ph)*0.18*(1-up)*(1-wk) + Math.sin(st)*0.25*wk;
   if (w.flick > 0) w.flick -= 0.08; else if (Math.random() < 0.004) w.flick = 1;
   const f = Math.max(0, w.flick) * 0.35;
   w.earL.rotation.z = f; w.earR.rotation.z = -f*0.4;
@@ -365,10 +371,12 @@ function addOrUpdate(key, info, isYou){
   if (w && w.coatKey !== coatKey){ disposeWolf(w); wolves.delete(key); w = null; }
   if (!w){
     w = makeWolf(info.coat, (hashStr(key) % 1000) / 1000);
+    w.appear = 0; w.group.scale.setScalar(0.001);
     w.coatKey = coatKey; w.key = key; w.lastHowl = info.howl; w.lastSayN = info.say ? info.say.n : 0;
     if (!isYou && me.joined && performance.now() > quietUntil) logSys(info.name + " joined the cliff");
     scene.add(w.group);
     makeTag(w, info.name, isYou);
+    w.tag.style.opacity = "0";
     wolves.set(key, w);
   } else {
     if (w.name !== info.name) w.tag.firstChild.textContent = isYou ? info.name + " (you)" : info.name;
@@ -406,12 +414,45 @@ function syncPeers(peers){
     addOrUpdate(p.peer, info, false);
     seen.add(p.peer);
   }
-  for (const [k,w] of wolves){ if (!seen.has(k)){ if (me.joined) logSys(w.name + " left the cliff"); disposeWolf(w); wolves.delete(k); } }
+  for (const [k,w] of wolves){ if (!seen.has(k)){ if (me.joined) logSys(w.name + " left the cliff"); wolves.delete(k); if (w.group.visible && k !== "local") leaving.add(w); else disposeWolf(w); } }
   layout();
 }
 
 /* ---------- layout & camera ---------- */
 let horizonFrac = 0.35;
+const camGoal = { pos: new THREE.Vector3(), look: new THREE.Vector3(), init: false };
+const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
+const leaving = new Set();   // wolves fading out after their owner left
+function applyCamera(){
+  camera.position.copy(camPos);
+  camera.lookAt(camLook);
+  camera.updateMatrixWorld();
+  const vf = THREE.MathUtils.degToRad(camera.fov);
+  const pitch = Math.atan2(camLook.y - camPos.y, camLook.z - camPos.z);
+  horizonFrac = 0.5 + Math.tan(pitch) / (2*Math.tan(vf/2));
+}
+function offscreenX(z){
+  const vf = THREE.MathUtils.degToRad(camera.fov);
+  const hf = 2 * Math.atan(Math.tan(vf/2) * camera.aspect);
+  return Math.tan(hf/2) * Math.max(4, z - camGoal.pos.z) + 2.5;
+}
+const WALK_SPEED = 2.3;
+function wrapAngle(a){ while (a > Math.PI) a -= 2*Math.PI; while (a < -Math.PI) a += 2*Math.PI; return a; }
+function stepWolf(w, tx, tz, restRy, dt){
+  const p = w.group.position, dx = tx - p.x, dz = tz - p.z, dist = Math.hypot(dx, dz);
+  const moving = dist > 0.03;
+  let want = restRy;
+  if (moving){
+    want = Math.atan2(dx, dz);
+    const facing = Math.cos(wrapAngle(want - w.group.rotation.y));   // slow down while still turning
+    const step = Math.min(dist, WALK_SPEED * dt * Math.max(0.25, facing));
+    p.x += dx/dist*step; p.z += dz/dist*step;
+  } else { p.x = tx; p.z = tz; }
+  w.group.rotation.y += wrapAngle(want - w.group.rotation.y) * Math.min(1, dt*7);
+  w.walk += ((moving ? 1 : 0) - w.walk) * Math.min(1, dt*9);
+  w.stride += dt * 9.5 * Math.max(w.walk, 0.001);
+  return moving;
+}
 function layout(){
   const list = [...wolves.values()].sort((a,b) => (a.seat - b.seat) || (a.key < b.key ? -1 : 1));
   const visible = me.joined ? list : [];
@@ -425,19 +466,25 @@ function layout(){
     const inRow = Math.min(perRow, visible.length - r*perRow);
     const x = (c - (inRow - 1)/2) * SP + (r % 2 ? SP*0.3 : 0);
     const z = 0.15 - r*ROW_GAP + (w.seed - 0.5)*0.3;
-    w.group.position.set(x, 0, z);
-    w.group.rotation.y = (w.seed - 0.5) * 0.35;
+    w.goal = { x, z, ry: (w.seed - 0.5) * 0.35 };
   });
   const width = (Math.min(n, perRow) - 1) * SP + 2.6;
   const vf = THREE.MathUtils.degToRad(camera.fov);
   const hf = 2 * Math.atan(Math.tan(vf/2) * aspect);
   const d = Math.max(6.5, (width/2) / Math.tan(hf/2) + 1.2);
   const back = -(rows - 1) * ROW_GAP;
-  camera.position.set(0, 1.1 + d*0.3, back - d);
-  const target = new THREE.Vector3(0, 1.3, back + 7);
-  camera.lookAt(target);
-  const pitch = Math.atan2(target.y - camera.position.y, target.z - camera.position.z);
-  horizonFrac = 0.5 + Math.tan(pitch) / (2*Math.tan(vf/2));
+  camGoal.pos.set(0, 1.1 + d*0.3, back - d);
+  camGoal.look.set(0, 1.3, back + 7);
+  if (!camGoal.init){ camGoal.init = true; camPos.copy(camGoal.pos); camLook.copy(camGoal.look); }
+  visible.forEach((w, i) => {
+    if (w.placed) return;
+    const side = w.goal.x > 0.01 ? 1 : w.goal.x < -0.01 ? -1 : (w.seed > 0.5 ? 1 : -1);
+    const startX = side * (offscreenX(w.goal.z) + (i % 3) * 0.8);
+    w.group.position.set(startX, 0, w.goal.z - 0.6);
+    w.group.rotation.y = -side * Math.PI / 2;
+    w.placed = true;
+  });
+  applyCamera();
   drawSky();
   updateCount();
 }
@@ -508,20 +555,50 @@ addEventListener("resize", resize);
 
 const tmp = new THREE.Vector3();
 let last = 0;
+function placeTag(w){
+  w.group.updateMatrixWorld();
+  tmp.set(0, 2.75, 0.4).applyMatrix4(w.group.matrixWorld).project(camera);
+  const x = Math.round((tmp.x*0.5 + 0.5) * innerWidth), y = Math.round((-tmp.y*0.5 + 0.5) * innerHeight);
+  if (x !== w.tagX || y !== w.tagY){
+    w.tagX = x; w.tagY = y;
+    w.tag.style.transform = `translate(${x}px,${y}px) translate(-50%,-100%)`;
+  }
+}
 function frame(now){
   requestAnimationFrame(frame);
   if (now - last < 32) return;        // ~30 fps keeps phones cool
   last = now;
-  const t = now / 1000;
+  const t = now / 1000, k = 0.16;
+  const dt = Math.min(0.1, (now - (frame.prev || now)) / 1000); frame.prev = now;
+  if (camPos.distanceToSquared(camGoal.pos) > 1e-6 || camLook.distanceToSquared(camGoal.look) > 1e-6){
+    camPos.lerp(camGoal.pos, k); camLook.lerp(camGoal.look, k);
+    if (camPos.distanceToSquared(camGoal.pos) < 1e-4){ camPos.copy(camGoal.pos); camLook.copy(camGoal.look); }
+    applyCamera(); drawSky();
+  }
   for (const w of wolves.values()){
     if (!w.group.visible) continue;
-    animateWolf(w, t, now);
-    tmp.set(0, 2.75, 0.4).applyMatrix4(w.group.matrixWorld).project(camera);
-    const x = Math.round((tmp.x*0.5 + 0.5) * innerWidth), y = Math.round((-tmp.y*0.5 + 0.5) * innerHeight);
-    if (x !== w.tagX || y !== w.tagY){
-      w.tagX = x; w.tagY = y;
-      w.tag.style.transform = `translate(${x}px,${y}px) translate(-50%,-100%)`;
+    if (w.goal) stepWolf(w, w.goal.x, w.goal.z, w.goal.ry, dt);
+    if (w.appear < 1){
+      w.group.scale.setScalar(1);
+      w.appear = Math.min(1, w.appear + 0.05);
+      w.tag.style.opacity = String(w.appear);
     }
+    animateWolf(w, t, now);
+    placeTag(w);
+  }
+  for (const w of leaving){
+    const p = w.group.position;
+    if (w.exitX === undefined){
+      const side = p.x >= 0 ? 1 : -1;
+      w.exitFrom = p.x; w.exitZ = p.z - 1.2; w.exitX = side * offscreenX(w.exitZ);
+      w.howlStart = 0; w.tag.classList.remove("howling", "saying");
+    }
+    const moving = stepWolf(w, w.exitX, w.exitZ, w.group.rotation.y, dt);
+    const prog = Math.min(1, Math.abs(p.x - w.exitFrom) / Math.max(0.1, Math.abs(w.exitX - w.exitFrom)));
+    w.tag.style.opacity = String(Math.max(0, 1 - prog*1.6));
+    if (!moving){ disposeWolf(w); leaving.delete(w); continue; }
+    animateWolf(w, t, now);
+    placeTag(w);
   }
   renderer.render(scene, camera);
 }
@@ -678,15 +755,25 @@ $("#chat-form").addEventListener("submit", e => {
 /* ---------- pack connection (Supabase Realtime) ---------- */
 const CFG = window.WOLFPACK_CONFIG || {};
 const myId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : "w" + Math.random().toString(36).slice(2) + Date.now().toString(36);
-let chan = null;
+let chan = null, tracked = false, hideTimer = 0;
 function peersFromState(){
   if (!chan) return [];
   const st = chan.presenceState();
   return Object.keys(st).map(k => ({ peer:k, isMe: k === myId, kind:"viewer", presence: (st[k] && st[k][0]) || {} }));
 }
 function trackMe(){
-  if (chan && me.joined && roomState === "live") chan.track({ name: me.name, coat: me.coat, seat: me.seat }).catch(()=>{});
+  if (chan && me.joined && roomState === "live"){ tracked = true; chan.track({ name: me.name, coat: me.coat, seat: me.seat }).catch(()=>{}); }
 }
+function untrackMe(){
+  if (chan && tracked){ tracked = false; chan.untrack().catch(()=>{}); }
+}
+document.addEventListener("visibilitychange", () => {
+  clearTimeout(hideTimer);
+  if (document.hidden) hideTimer = setTimeout(untrackMe, 15000);   // backgrounded for 15 s = left the cliff
+  else { if (!tracked) trackMe(); syncPeers(peersFromState()); }
+});
+addEventListener("pagehide", e => { untrackMe(); if (!e.persisted && chan) { try{ chan.unsubscribe(); }catch(_){} } });
+addEventListener("pageshow", e => { if (e.persisted){ if (!tracked) trackMe(); syncPeers(peersFromState()); } });
 (function connect(){
   const url = CFG.supabaseUrl || "", key = CFG.supabaseAnonKey || "";
   if (!window.supabase || !url || !key || /YOUR_/.test(url + key)){
@@ -711,7 +798,7 @@ function trackMe(){
   });
   chan.subscribe(status => {
     if (status === "SUBSCRIBED"){ roomState = "live"; note.textContent = ""; trackMe(); updateCount(); }
-    else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED"){ roomState = "none"; updateCount(); }
+    else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED"){ roomState = "none"; tracked = false; updateCount(); }
   });
 })();
 
